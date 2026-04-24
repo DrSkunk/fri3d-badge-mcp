@@ -5,9 +5,70 @@
     <title>fri3d-badge-mcp</title>
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <style>
-      body { font: 16px/1.5 system-ui, sans-serif; max-width: 42rem; margin: 3rem auto; padding: 0 1rem; color: #222; }
-      code { background: #f4f4f4; padding: 0.1rem 0.35rem; border-radius: 4px; }
+      body {
+        font: 16px/1.5 system-ui, sans-serif;
+        max-width: 60rem;
+        margin: 2rem auto;
+        padding: 0 1rem 2rem;
+        color: #222;
+      }
+      code {
+        background: #f4f4f4;
+        padding: 0.1rem 0.35rem;
+        border-radius: 4px;
+      }
       a { color: #0366d6; }
+      .card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 1rem;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      label {
+        font-size: 0.92rem;
+        color: #444;
+        display: block;
+        margin-bottom: 0.25rem;
+      }
+      input, select, textarea, button {
+        font: inherit;
+      }
+      input, select, textarea {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #cfcfcf;
+        border-radius: 6px;
+        padding: 0.55rem 0.65rem;
+      }
+      textarea {
+        min-height: 8rem;
+        resize: vertical;
+      }
+      button {
+        border: 1px solid #bbb;
+        border-radius: 6px;
+        padding: 0.45rem 0.75rem;
+        background: #fafafa;
+        cursor: pointer;
+      }
+      button:hover { background: #f2f2f2; }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      }
+      .status {
+        font-size: 0.92rem;
+        color: #555;
+      }
     </style>
   </head>
   <body>
@@ -19,5 +80,200 @@
       <a href="https://docs.micropythonos.com/">MicroPythonOS</a> documentation.
     </p>
     <p>MCP endpoint: <code>/mcp</code> (streamable HTTP transport).</p>
+
+    <div class="card">
+      <h2 style="margin-top: 0">Basic MCP Tester</h2>
+      <p class="status">Quickly initialize a session, list tools, and call a tool directly from this page.</p>
+
+      <div class="row">
+        <div>
+          <label for="endpoint">Endpoint</label>
+          <input id="endpoint" class="mono" value="/mcp" />
+        </div>
+
+        <div class="controls">
+          <button id="btn-init" type="button">1) Initialize</button>
+          <button id="btn-list" type="button">2) List Tools</button>
+        </div>
+
+        <div>
+          <label for="tool-name">Tool name</label>
+          <select id="tool-name"></select>
+        </div>
+
+        <div>
+          <label for="tool-args">Tool args (JSON)</label>
+          <textarea id="tool-args" class="mono">{}</textarea>
+        </div>
+
+        <div class="controls">
+          <button id="btn-call" type="button">3) Call Tool</button>
+          <button id="btn-clear" type="button">Clear Log</button>
+        </div>
+
+        <div>
+          <label for="log">Response log</label>
+          <textarea id="log" class="mono" readonly></textarea>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const endpointInput = document.getElementById("endpoint");
+      const toolSelect = document.getElementById("tool-name");
+      const toolArgs = document.getElementById("tool-args");
+      const logEl = document.getElementById("log");
+      const btnInit = document.getElementById("btn-init");
+      const btnList = document.getElementById("btn-list");
+      const btnCall = document.getElementById("btn-call");
+      const btnClear = document.getElementById("btn-clear");
+
+      let sessionId = null;
+      let nextId = 1;
+
+      function appendLog(label, value) {
+        const ts = new Date().toISOString();
+        const payload = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+        logEl.value += `[${ts}] ${label}\n${payload}\n\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function endpointUrl() {
+        const raw = endpointInput.value.trim() || "/mcp";
+        return new URL(raw, window.location.origin).toString();
+      }
+
+      async function mcpRequest(method, params) {
+        const body = { jsonrpc: "2.0", id: nextId++, method, params };
+        const headers = {
+          "content-type": "application/json",
+          "accept": "application/json, text/event-stream",
+        };
+        if (sessionId) headers["mcp-session-id"] = sessionId;
+
+        const res = await fetch(endpointUrl(), {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+        });
+
+        const returnedSessionId = res.headers.get("mcp-session-id");
+        if (returnedSessionId) sessionId = returnedSessionId;
+
+        const contentType = (res.headers.get("content-type") || "").toLowerCase();
+        const text = await res.text();
+        let parsed;
+        if (contentType.includes("application/json")) {
+          try {
+            parsed = JSON.parse(text);
+          } catch {
+            parsed = { raw: text };
+          }
+        } else {
+          parsed = { raw: text };
+        }
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${text.slice(0, 500)}`);
+        }
+
+        return parsed;
+      }
+
+      async function initializeSession() {
+        const init = await mcpRequest("initialize", {
+          protocolVersion: "2025-03-26",
+          capabilities: { tools: {} },
+          clientInfo: { name: "fri3d-badge-browser-tester", version: "0.1.0" },
+        });
+        appendLog("initialize", init);
+
+        // Best-effort follow-up notification used by many MCP servers.
+        try {
+          await fetch(endpointUrl(), {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "mcp-session-id": sessionId,
+            },
+            body: JSON.stringify({
+              jsonrpc: "2.0",
+              method: "notifications/initialized",
+              params: {},
+            }),
+          });
+        } catch {
+          // Non-fatal for this basic tester.
+        }
+      }
+
+      async function listTools() {
+        const res = await mcpRequest("tools/list", {});
+        appendLog("tools/list", res);
+        const tools = res && res.result && Array.isArray(res.result.tools) ? res.result.tools : [];
+
+        toolSelect.innerHTML = "";
+        for (const t of tools) {
+          const opt = document.createElement("option");
+          opt.value = t.name;
+          opt.textContent = t.name;
+          toolSelect.appendChild(opt);
+        }
+
+        if (!tools.length) {
+          const opt = document.createElement("option");
+          opt.value = "";
+          opt.textContent = "(no tools returned)";
+          toolSelect.appendChild(opt);
+        }
+      }
+
+      async function callTool() {
+        const name = toolSelect.value;
+        if (!name) throw new Error("No tool selected");
+
+        let args;
+        try {
+          args = JSON.parse(toolArgs.value || "{}");
+        } catch (err) {
+          throw new Error(`Invalid JSON args: ${err.message}`);
+        }
+
+        const res = await mcpRequest("tools/call", { name, arguments: args });
+        appendLog(`tools/call (${name})`, res);
+      }
+
+      btnInit.addEventListener("click", async () => {
+        try {
+          await initializeSession();
+        } catch (err) {
+          appendLog("error", String(err));
+        }
+      });
+
+      btnList.addEventListener("click", async () => {
+        try {
+          if (!sessionId) await initializeSession();
+          await listTools();
+        } catch (err) {
+          appendLog("error", String(err));
+        }
+      });
+
+      btnCall.addEventListener("click", async () => {
+        try {
+          if (!sessionId) await initializeSession();
+          await callTool();
+        } catch (err) {
+          appendLog("error", String(err));
+        }
+      });
+
+      btnClear.addEventListener("click", () => {
+        logEl.value = "";
+      });
+
+      appendLog("info", "Tester ready. Click 'Initialize' then 'List Tools'.");
+    </script>
   </body>
 </html>
