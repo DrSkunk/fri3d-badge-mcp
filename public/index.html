@@ -143,6 +143,68 @@
         return new URL(raw, window.location.origin).toString();
       }
 
+      function tryParseJson(text) {
+        try {
+          return JSON.parse(text);
+        } catch {
+          return null;
+        }
+      }
+
+      function extractJsonObjectsFromText(text) {
+        const out = [];
+
+        // 1) Whole body is one JSON object/array.
+        const whole = tryParseJson(text);
+        if (whole !== null) {
+          if (Array.isArray(whole)) out.push(...whole);
+          else out.push(whole);
+          return out;
+        }
+
+        // 2) NDJSON (one JSON object per line).
+        for (const line of text.split(/\r?\n/)) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          const parsed = tryParseJson(trimmed);
+          if (parsed !== null) out.push(parsed);
+        }
+        if (out.length) return out;
+
+        // 3) SSE framing: lines prefixed with "data:" possibly across multiple lines.
+        const chunks = text.split(/\n\n+/);
+        for (const chunk of chunks) {
+          const dataLines = [];
+          for (const rawLine of chunk.split(/\r?\n/)) {
+            const line = rawLine.trim();
+            if (line.startsWith("data:")) {
+              dataLines.push(line.slice(5).trimStart());
+            }
+          }
+          if (!dataLines.length) continue;
+          const payload = dataLines.join("\n");
+          const parsed = tryParseJson(payload);
+          if (parsed !== null) out.push(parsed);
+        }
+
+        return out;
+      }
+
+      function pickBestRpcObject(objects) {
+        if (!Array.isArray(objects) || objects.length === 0) return null;
+
+        // Prefer a standard JSON-RPC response with this request id when available.
+        for (let i = objects.length - 1; i >= 0; i--) {
+          const obj = objects[i];
+          if (obj && typeof obj === "object" && obj.jsonrpc === "2.0" && ("result" in obj || "error" in obj)) {
+            return obj;
+          }
+        }
+
+        // Fallback to last parseable object.
+        return objects[objects.length - 1];
+      }
+
       async function mcpRequest(method, params) {
         const body = { jsonrpc: "2.0", id: nextId++, method, params };
         const headers = {
@@ -160,21 +222,12 @@
         const returnedSessionId = res.headers.get("mcp-session-id");
         if (returnedSessionId) sessionId = returnedSessionId;
 
-        const contentType = (res.headers.get("content-type") || "").toLowerCase();
         const text = await res.text();
-        let parsed;
-        if (contentType.includes("application/json")) {
-          try {
-            parsed = JSON.parse(text);
-          } catch {
-            parsed = { raw: text };
-          }
-        } else {
-          parsed = { raw: text };
-        }
+        const parsedObjects = extractJsonObjectsFromText(text);
+        const parsed = pickBestRpcObject(parsedObjects) || { raw: text };
 
         if (!res.ok) {
-          throw new Error(`HTTP ${res.status}: ${text.slice(0, 500)}`);
+          throw new Error(`HTTP ${res.status}: ${JSON.stringify(parsed).slice(0, 800)}`);
         }
 
         return parsed;
