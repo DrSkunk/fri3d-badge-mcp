@@ -262,9 +262,7 @@ const handler = createMcpHandler((server) => {
 }, {
   serverInfo: { name: "fri3d-badge-mcp", version: "0.1.0" },
 }, {
-  // SSE transport requires Redis for cross-instance pub/sub. We only need the
-  // streamable-HTTP transport (the current MCP spec), so disable SSE — this
-  // also removes the Redis requirement entirely.
+  // Expose streamable-HTTP transport only.
   disableSse: true,
 });
 

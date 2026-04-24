@@ -79,8 +79,7 @@ The MCP endpoint is then:
 https://<your-deployment>.vercel.app/mcp
 ```
 
-Uses the streamable-HTTP transport (the current MCP spec). The legacy SSE
-transport is intentionally disabled so the server has **no Redis dependency**.
+Uses streamable-HTTP transport only (the current MCP spec).
 
 ## Local development
 
