@@ -15,8 +15,12 @@ template.
 - MicroPython official docs — <https://docs.micropython.org/en/latest/>
   (Sphinx site; we use its `searchindex.js` for keyword search and scrape
   individual pages for content.)
+- MicroPythonOS docs — <https://docs.micropythonos.com/>
+  (MkDocs Material site; pages and sections discovered via
+  `search/search_index.json`.)
 - Fri3d Camp 2026 badge — <https://fri3dcamp.github.io/badge_2026/>
-  (MkDocs Material site; pages discovered via `sitemap.xml`.)
+  (MkDocs Material site; pages and sections discovered via
+  `search/search_index.json`.)
 
 Nothing is bundled or pre-indexed — everything is fetched on demand and cached
 in-memory per warm function instance, so the server stays current with upstream
@@ -31,7 +35,10 @@ docs without redeploys.
 | `list_micropython_modules` | Curated list of common MicroPython modules + quick-references. |
 | `search_fri3d_badge_docs` | Substring search across all Fri3d badge_2026 pages. |
 | `get_fri3d_badge_page` | Fetch & clean a Fri3d badge_2026 page. |
-| `list_fri3d_badge_pages` | List all known Fri3d badge_2026 pages from the sitemap. |
+| `list_fri3d_badge_pages` | List all known Fri3d badge_2026 pages and sections. |
+| `search_micropythonos_docs` | Substring search across all MicroPythonOS docs pages. |
+| `get_micropythonos_page` | Fetch & clean a MicroPythonOS docs page. |
+| `list_micropythonos_pages` | List all known MicroPythonOS docs pages and sections. |
 
 All tools return `text` content suitable for direct consumption by an LLM.
 
@@ -47,7 +54,8 @@ src/
     html.ts            # Lightweight HTML → markdown-ish text extractor
   sources/
     micropython.ts     # MicroPython search + page fetch
-    fri3d.ts           # Fri3d badge sitemap + search + page fetch
+    fri3d.ts           # Fri3d badge docs search + page fetch
+    micropythonos.ts   # MicroPythonOS docs search + page fetch
 scripts/
   test-client.mjs      # Sample MCP client for local smoke testing
 vercel.json            # Routes everything to /api/server, 60s max duration
@@ -91,8 +99,8 @@ etc.) by pointing at `http://localhost:3000/mcp`.
   stemmed tokens. The implementation does prefix matching plus title/object
   weighting; it is intentionally simple but covers typical lookups
   (`machine.Pin`, `interrupt`, `neopixel`, `wifi`, …).
-- The Fri3d badge_2026 site is small at the moment, so search just substring-
-  matches all discovered pages. As the site grows, swap in MkDocs Material's
-  `search/search_index.json` for better results.
+- The Fri3d badge_2026 and MicroPythonOS sources both use MkDocs Material's
+  `search/search_index.json` and currently perform weighted substring matching
+  over title and body text.
 - Page fetches are restricted to the documentation hostnames as a small SSRF
   guard.

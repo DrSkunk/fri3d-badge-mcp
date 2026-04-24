@@ -11,6 +11,11 @@ import {
   listFri3dPages,
   searchFri3dDocs,
 } from "../src/sources/fri3d.js";
+import {
+  getMicropythonOSPage,
+  listMicropythonOSPages,
+  searchMicropythonOSDocs,
+} from "../src/sources/micropythonos.js";
 
 const handler = createMcpHandler((server) => {
   // ---------------------------------------------------------------------------
@@ -172,6 +177,83 @@ const handler = createMcpHandler((server) => {
           {
             type: "text",
             text: `Fri3d badge_2026 pages (${pages.length}):\n\n${lines.join("\n")}`,
+          },
+        ],
+      };
+    },
+  );
+  // ---------------------------------------------------------------------------
+  // MicroPythonOS docs
+  // ---------------------------------------------------------------------------
+
+  server.tool(
+    "search_micropythonos_docs",
+    "Search the MicroPythonOS documentation (docs.micropythonos.com). " +
+      "Returns ranked pages with a snippet around the match.",
+    {
+      query: z.string().min(1).describe("Free-text search query."),
+      limit: z.number().int().min(1).max(25).optional().describe("Max results (default 10)."),
+    },
+    async ({ query, limit }) => {
+      const hits = await searchMicropythonOSDocs(query, { limit });
+      if (hits.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `No MicroPythonOS docs pages match "${query}". Try \`list_micropythonos_pages\` to browse all pages.`,
+            },
+          ],
+        };
+      }
+      const lines = hits.map(
+        (h, i) =>
+          `${i + 1}. ${h.title}\n   url:   ${h.url}\n   score: ${h.score}\n   …${h.snippet}…`,
+      );
+      return {
+        content: [
+          { type: "text", text: `MicroPythonOS docs results for "${query}":\n\n${lines.join("\n\n")}` },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    "get_micropythonos_page",
+    "Fetch a MicroPythonOS documentation page and return its cleaned text content. " +
+      "Accepts a path like 'frameworks/app-manager/' or a full docs.micropythonos.com URL.",
+    {
+      path: z.string().min(1).describe("Page path or full URL on the docs.micropythonos.com site."),
+      maxChars: z.number().int().min(500).max(200_000).optional().describe("Max chars (default 40000)."),
+    },
+    async ({ path, maxChars }) => {
+      const page = await getMicropythonOSPage(path, { maxChars });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `# ${page.title}\nSource: ${page.url}${page.truncated ? "\n(content truncated)" : ""}\n\n${page.content}`,
+          },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    "list_micropythonos_pages",
+    "List all known pages and sections of the MicroPythonOS documentation " +
+      "(parsed from MkDocs Material's prebuilt search_index.json).",
+    {},
+    async () => {
+      const pages = await listMicropythonOSPages();
+      const lines = pages.map(
+        (p) => `- ${p.isSection ? "(section) " : "         "}${p.title}  →  ${p.url}`,
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: `MicroPythonOS docs pages (${pages.length}):\n\n${lines.join("\n")}`,
           },
         ],
       };
