@@ -7,10 +7,11 @@
     <style>
       body {
         font: 16px/1.5 system-ui, sans-serif;
-        max-width: 60rem;
+        max-width: 78rem;
         margin: 2rem auto;
         padding: 0 1rem 2rem;
         color: #222;
+        background: #fbfbfd;
       }
       code {
         background: #f4f4f4;
@@ -18,11 +19,20 @@
         border-radius: 4px;
       }
       a { color: #0366d6; }
+      .layout {
+        display: grid;
+        grid-template-columns: 1.3fr 1fr;
+        gap: 1rem;
+      }
+      @media (max-width: 1000px) {
+        .layout { grid-template-columns: 1fr; }
+      }
       .card {
         border: 1px solid #ddd;
         border-radius: 8px;
         padding: 1rem;
         margin-top: 1rem;
+        background: #fff;
       }
       .row {
         display: grid;
@@ -69,6 +79,89 @@
         font-size: 0.92rem;
         color: #555;
       }
+      .statusline {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid #d0d0d8;
+        background: #f8f8fb;
+        border-radius: 999px;
+        padding: 0.2rem 0.6rem;
+        font-size: 0.82rem;
+        color: #4a4a57;
+      }
+      .pill.ok {
+        border-color: #afd7b8;
+        background: #eaf7ee;
+        color: #1e6a31;
+      }
+      .pill.err {
+        border-color: #e1b0b0;
+        background: #fdeeee;
+        color: #8a2a2a;
+      }
+      .tools-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+        max-height: 18rem;
+        overflow: auto;
+        border: 1px solid #cfcfcf;
+        border-radius: 6px;
+        padding: 0.4rem;
+      }
+      .tool-item {
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 0.45rem 0.55rem;
+        background: #fafafa;
+      }
+      button.tool-item {
+        text-align: left;
+      }
+      .tool-item:hover { background: #f3f3f8; }
+      .tool-item.active {
+        border-color: #8cb3ff;
+        background: #eef4ff;
+      }
+      .tool-name {
+        font-weight: 600;
+      }
+      .tool-desc {
+        color: #555;
+        font-size: 0.88rem;
+        margin-top: 0.15rem;
+      }
+      .editor-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+      }
+      @media (max-width: 800px) {
+        .editor-grid { grid-template-columns: 1fr; }
+      }
+      .kv-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+      }
+      @media (max-width: 680px) {
+        .kv-grid { grid-template-columns: 1fr; }
+      }
+      .section-title {
+        font-size: 0.92rem;
+        font-weight: 600;
+        color: #444;
+        margin-bottom: 0.35rem;
+      }
+      .hint {
+        color: #666;
+        font-size: 0.84rem;
+      }
     </style>
   </head>
   <body>
@@ -81,55 +174,120 @@
     </p>
     <p>MCP endpoint: <code>/mcp</code> (streamable HTTP transport).</p>
 
-    <div class="card">
-      <h2 style="margin-top: 0">Basic MCP Tester</h2>
-      <p class="status">Quickly initialize a session, list tools, and call a tool directly from this page.</p>
+    <div class="layout">
+      <div class="card">
+        <h2 style="margin-top: 0">MCP Workbench</h2>
+        <p class="status">Interactive MCP client with schema-aware arguments, request history, and quick reruns.</p>
 
-      <div class="row">
-        <div>
-          <label for="endpoint">Endpoint</label>
-          <input id="endpoint" class="mono" value="/mcp" />
-        </div>
+        <div class="row">
+          <div>
+            <label for="endpoint">Endpoint</label>
+            <input id="endpoint" class="mono" value="/mcp" />
+          </div>
 
-        <div class="controls">
-          <button id="btn-init" type="button">1) Initialize</button>
-          <button id="btn-list" type="button">2) List Tools</button>
-        </div>
+          <div class="controls">
+            <button id="btn-init" type="button">Initialize Session</button>
+            <button id="btn-list" type="button">Refresh Tools</button>
+            <button id="btn-reset-session" type="button">Reset Session</button>
+          </div>
 
-        <div>
-          <label for="tool-name">Tool name</label>
-          <select id="tool-name"></select>
-        </div>
+          <div class="statusline">
+            <span class="pill" id="pill-conn">Not initialized</span>
+            <span class="pill" id="pill-session">Session: none</span>
+            <span class="pill" id="pill-tools">Tools: 0</span>
+            <span class="pill" id="pill-latency">Last: -</span>
+          </div>
 
-        <div>
-          <label for="tool-args">Tool args (JSON)</label>
-          <textarea id="tool-args" class="mono">{}</textarea>
-        </div>
+          <div>
+            <label for="tool-filter">Filter tools</label>
+            <input id="tool-filter" placeholder="Search by name or description" />
+          </div>
 
-        <div class="controls">
-          <button id="btn-call" type="button">3) Call Tool</button>
-          <button id="btn-clear" type="button">Clear Log</button>
-        </div>
+          <div>
+            <label>Tool explorer</label>
+            <div id="tools-grid" class="tools-grid"></div>
+          </div>
 
-        <div>
-          <label for="log">Response log</label>
-          <textarea id="log" class="mono" readonly></textarea>
+          <div class="editor-grid">
+            <div>
+              <div class="section-title">Schema form</div>
+              <div id="form-hint" class="hint">Select a tool to generate fields from its input schema.</div>
+              <div id="schema-form" class="row"></div>
+            </div>
+
+            <div>
+              <label for="tool-args">Arguments JSON</label>
+              <textarea id="tool-args" class="mono">{}</textarea>
+              <div class="hint">Form and JSON stay in sync. Press Ctrl+Enter (or Cmd+Enter) to run.</div>
+            </div>
+          </div>
+
+          <div class="controls">
+            <button id="btn-call" type="button">Call Selected Tool</button>
+            <button id="btn-clear" type="button">Clear Response Log</button>
+          </div>
+
+          <div>
+            <label for="log">Response log</label>
+            <textarea id="log" class="mono" readonly></textarea>
+          </div>
         </div>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-top: 0">Request History</h2>
+        <p class="status">Most recent calls first. Load args back or rerun instantly.</p>
+        <div id="history" class="row"></div>
       </div>
     </div>
 
+    <template id="history-item-template">
+      <div class="tool-item">
+        <div class="tool-name"></div>
+        <div class="tool-desc mono"></div>
+        <div class="controls" style="margin-top: 0.45rem">
+          <button type="button" data-action="load">Load</button>
+          <button type="button" data-action="rerun">Rerun</button>
+        </div>
+      </div>
+    </template>
+
     <script>
       const endpointInput = document.getElementById("endpoint");
-      const toolSelect = document.getElementById("tool-name");
+      const toolsGrid = document.getElementById("tools-grid");
+      const toolFilter = document.getElementById("tool-filter");
+      const schemaForm = document.getElementById("schema-form");
+      const formHint = document.getElementById("form-hint");
       const toolArgs = document.getElementById("tool-args");
       const logEl = document.getElementById("log");
       const btnInit = document.getElementById("btn-init");
       const btnList = document.getElementById("btn-list");
       const btnCall = document.getElementById("btn-call");
       const btnClear = document.getElementById("btn-clear");
+      const btnResetSession = document.getElementById("btn-reset-session");
+      const historyEl = document.getElementById("history");
+      const historyTemplate = document.getElementById("history-item-template");
+      const pillConn = document.getElementById("pill-conn");
+      const pillSession = document.getElementById("pill-session");
+      const pillTools = document.getElementById("pill-tools");
+      const pillLatency = document.getElementById("pill-latency");
 
       let sessionId = null;
       let nextId = 1;
+      let tools = [];
+      let selectedToolName = "";
+      let history = [];
+
+      function setPill(el, text, cls) {
+        el.className = "pill" + (cls ? ` ${cls}` : "");
+        el.textContent = text;
+      }
+
+      function updateStatus() {
+        setPill(pillConn, sessionId ? "Initialized" : "Not initialized", sessionId ? "ok" : "");
+        setPill(pillSession, `Session: ${sessionId ? sessionId.slice(0, 16) + "..." : "none"}`);
+        setPill(pillTools, `Tools: ${tools.length}`);
+      }
 
       function appendLog(label, value) {
         const ts = new Date().toISOString();
@@ -154,7 +312,6 @@
       function extractJsonObjectsFromText(text) {
         const out = [];
 
-        // 1) Whole body is one JSON object/array.
         const whole = tryParseJson(text);
         if (whole !== null) {
           if (Array.isArray(whole)) out.push(...whole);
@@ -162,7 +319,6 @@
           return out;
         }
 
-        // 2) NDJSON (one JSON object per line).
         for (const line of text.split(/\r?\n/)) {
           const trimmed = line.trim();
           if (!trimmed) continue;
@@ -171,15 +327,12 @@
         }
         if (out.length) return out;
 
-        // 3) SSE framing: lines prefixed with "data:" possibly across multiple lines.
         const chunks = text.split(/\n\n+/);
         for (const chunk of chunks) {
           const dataLines = [];
           for (const rawLine of chunk.split(/\r?\n/)) {
             const line = rawLine.trim();
-            if (line.startsWith("data:")) {
-              dataLines.push(line.slice(5).trimStart());
-            }
+            if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
           }
           if (!dataLines.length) continue;
           const payload = dataLines.join("\n");
@@ -190,19 +343,42 @@
         return out;
       }
 
+      function normalizeRpcCandidate(candidate) {
+        let current = candidate;
+        for (let i = 0; i < 2; i++) {
+          if (typeof current === "string") {
+            const parsed = tryParseJson(current);
+            if (parsed === null) break;
+            current = parsed;
+            continue;
+          }
+          break;
+        }
+
+        if (!current || typeof current !== "object") return null;
+
+        if (typeof current.data === "string") {
+          const nested = tryParseJson(current.data);
+          if (nested && typeof nested === "object") return nested;
+        }
+        if (current.data && typeof current.data === "object" && current.data.jsonrpc === "2.0") {
+          return current.data;
+        }
+
+        return current;
+      }
+
       function pickBestRpcObject(objects) {
         if (!Array.isArray(objects) || objects.length === 0) return null;
 
-        // Prefer a standard JSON-RPC response with this request id when available.
         for (let i = objects.length - 1; i >= 0; i--) {
-          const obj = objects[i];
-          if (obj && typeof obj === "object" && obj.jsonrpc === "2.0" && ("result" in obj || "error" in obj)) {
-            return obj;
+          const normalized = normalizeRpcCandidate(objects[i]);
+          if (normalized && normalized.jsonrpc === "2.0" && ("result" in normalized || "error" in normalized)) {
+            return normalized;
           }
         }
 
-        // Fallback to last parseable object.
-        return objects[objects.length - 1];
+        return normalizeRpcCandidate(objects[objects.length - 1]);
       }
 
       async function mcpRequest(method, params) {
@@ -213,35 +389,304 @@
         };
         if (sessionId) headers["mcp-session-id"] = sessionId;
 
+        const t0 = performance.now();
         const res = await fetch(endpointUrl(), {
           method: "POST",
           headers,
           body: JSON.stringify(body),
         });
+        const elapsed = Math.round(performance.now() - t0);
+        setPill(pillLatency, `Last: ${elapsed} ms`);
 
         const returnedSessionId = res.headers.get("mcp-session-id");
-        if (returnedSessionId) sessionId = returnedSessionId;
+        if (returnedSessionId) {
+          sessionId = returnedSessionId;
+          updateStatus();
+        }
 
         const text = await res.text();
         const parsedObjects = extractJsonObjectsFromText(text);
         const parsed = pickBestRpcObject(parsedObjects) || { raw: text };
 
         if (!res.ok) {
-          throw new Error(`HTTP ${res.status}: ${JSON.stringify(parsed).slice(0, 800)}`);
+          setPill(pillConn, "Error", "err");
+          throw new Error(`HTTP ${res.status}: ${JSON.stringify(parsed).slice(0, 900)}`);
         }
 
         return parsed;
+      }
+
+      function safeParseArgs() {
+        try {
+          const parsed = JSON.parse(toolArgs.value || "{}");
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+          return parsed;
+        } catch {
+          return {};
+        }
+      }
+
+      function writeArgs(args) {
+        toolArgs.value = JSON.stringify(args, null, 2);
+      }
+
+      function inferDefault(type, schema) {
+        if (!schema || typeof schema !== "object") return null;
+        if ("default" in schema) return schema.default;
+        if (Array.isArray(schema.enum) && schema.enum.length) return schema.enum[0];
+        if (type === "string") return "";
+        if (type === "integer" || type === "number") return 0;
+        if (type === "boolean") return false;
+        if (type === "array") return [];
+        if (type === "object") return {};
+        return null;
+      }
+
+      function syncArgsFromForm() {
+        const args = safeParseArgs();
+        const fields = schemaForm.querySelectorAll("[data-key]");
+        for (const field of fields) {
+          const key = field.getAttribute("data-key");
+          const t = field.getAttribute("data-type");
+          if (!key) continue;
+
+          if (t === "boolean") {
+            args[key] = Boolean(field.checked);
+            continue;
+          }
+
+          const raw = field.value;
+          if (raw === "") {
+            delete args[key];
+            continue;
+          }
+
+          if (t === "integer") {
+            const n = Number.parseInt(raw, 10);
+            if (!Number.isNaN(n)) args[key] = n;
+            continue;
+          }
+          if (t === "number") {
+            const n = Number.parseFloat(raw);
+            if (!Number.isNaN(n)) args[key] = n;
+            continue;
+          }
+          if (t === "json") {
+            const j = tryParseJson(raw);
+            if (j !== null) args[key] = j;
+            continue;
+          }
+
+          args[key] = raw;
+        }
+        writeArgs(args);
+      }
+
+      function syncFormFromArgs() {
+        const args = safeParseArgs();
+        const fields = schemaForm.querySelectorAll("[data-key]");
+        for (const field of fields) {
+          const key = field.getAttribute("data-key");
+          const t = field.getAttribute("data-type");
+          if (!key) continue;
+          const v = args[key];
+
+          if (v === undefined) {
+            if (t === "boolean") field.checked = false;
+            else field.value = "";
+            continue;
+          }
+
+          if (t === "boolean") field.checked = Boolean(v);
+          else if (t === "json") field.value = JSON.stringify(v);
+          else field.value = String(v);
+        }
+      }
+
+      function createField(key, schema, requiredSet) {
+        const type = Array.isArray(schema.type) ? schema.type[0] : (schema.type || "string");
+        const wrap = document.createElement("div");
+
+        const label = document.createElement("label");
+        label.textContent = `${key}${requiredSet.has(key) ? " *" : ""}`;
+        wrap.appendChild(label);
+
+        let input;
+        if (Array.isArray(schema.enum) && schema.enum.length) {
+          input = document.createElement("select");
+          for (const item of schema.enum) {
+            const opt = document.createElement("option");
+            opt.value = String(item);
+            opt.textContent = String(item);
+            input.appendChild(opt);
+          }
+          input.setAttribute("data-type", "string");
+        } else if (type === "boolean") {
+          input = document.createElement("input");
+          input.type = "checkbox";
+          input.style.width = "auto";
+          input.setAttribute("data-type", "boolean");
+        } else if (type === "integer" || type === "number") {
+          input = document.createElement("input");
+          input.type = "number";
+          input.step = type === "integer" ? "1" : "any";
+          input.setAttribute("data-type", type);
+        } else if (type === "object" || type === "array") {
+          input = document.createElement("textarea");
+          input.className = "mono";
+          input.rows = 2;
+          input.setAttribute("data-type", "json");
+        } else {
+          input = document.createElement("input");
+          input.type = "text";
+          input.setAttribute("data-type", "string");
+        }
+
+        input.setAttribute("data-key", key);
+
+        const dv = inferDefault(type, schema);
+        if (dv !== null) {
+          if (input.getAttribute("data-type") === "boolean") input.checked = Boolean(dv);
+          else if (input.getAttribute("data-type") === "json") input.value = JSON.stringify(dv);
+          else input.value = String(dv);
+        }
+
+        input.addEventListener("input", syncArgsFromForm);
+        input.addEventListener("change", syncArgsFromForm);
+
+        const hint = document.createElement("div");
+        hint.className = "hint";
+        hint.textContent = schema.description || type;
+
+        wrap.appendChild(input);
+        wrap.appendChild(hint);
+        return wrap;
+      }
+
+      function renderSchemaForm(tool) {
+        schemaForm.innerHTML = "";
+
+        if (!tool || !tool.inputSchema || typeof tool.inputSchema !== "object") {
+          formHint.textContent = "This tool has no object schema. Use raw JSON arguments.";
+          return;
+        }
+
+        const schema = tool.inputSchema;
+        const props = schema.properties && typeof schema.properties === "object" ? schema.properties : {};
+        const keys = Object.keys(props);
+        if (!keys.length) {
+          formHint.textContent = "No declared schema properties. Use raw JSON arguments.";
+          return;
+        }
+
+        formHint.textContent = "Edit fields here or edit JSON directly; both stay synchronized.";
+        const requiredSet = new Set(Array.isArray(schema.required) ? schema.required : []);
+
+        const grid = document.createElement("div");
+        grid.className = "kv-grid";
+        for (const key of keys) {
+          grid.appendChild(createField(key, props[key] || {}, requiredSet));
+        }
+        schemaForm.appendChild(grid);
+        syncFormFromArgs();
+      }
+
+      function filterTools() {
+        const q = toolFilter.value.trim().toLowerCase();
+        if (!q) return tools;
+        return tools.filter((t) => `${t.name || ""} ${t.description || ""}`.toLowerCase().includes(q));
+      }
+
+      function renderToolsList() {
+        toolsGrid.innerHTML = "";
+        const filtered = filterTools();
+
+        if (!filtered.length) {
+          const empty = document.createElement("div");
+          empty.className = "hint";
+          empty.textContent = "No tools match the current filter.";
+          toolsGrid.appendChild(empty);
+          return;
+        }
+
+        for (const t of filtered) {
+          const item = document.createElement("button");
+          item.type = "button";
+          item.className = "tool-item" + (t.name === selectedToolName ? " active" : "");
+
+          const name = document.createElement("div");
+          name.className = "tool-name mono";
+          name.textContent = t.name;
+
+          const desc = document.createElement("div");
+          desc.className = "tool-desc";
+          desc.textContent = t.description || "(no description)";
+
+          item.appendChild(name);
+          item.appendChild(desc);
+          item.addEventListener("click", () => {
+            selectedToolName = t.name;
+            renderToolsList();
+            renderSchemaForm(t);
+          });
+
+          toolsGrid.appendChild(item);
+        }
+      }
+
+      function renderHistory() {
+        historyEl.innerHTML = "";
+        if (!history.length) {
+          const empty = document.createElement("div");
+          empty.className = "hint";
+          empty.textContent = "No calls yet.";
+          historyEl.appendChild(empty);
+          return;
+        }
+
+        for (const entry of history) {
+          const node = historyTemplate.content.firstElementChild.cloneNode(true);
+          node.querySelector(".tool-name").textContent = entry.name;
+          node.querySelector(".tool-desc").textContent = `${entry.at}  args=${JSON.stringify(entry.args)}`;
+
+          node.querySelector('[data-action="load"]').addEventListener("click", () => {
+            selectedToolName = entry.name;
+            writeArgs(entry.args || {});
+            renderToolsList();
+            renderSchemaForm(tools.find((t) => t.name === selectedToolName));
+          });
+
+          node.querySelector('[data-action="rerun"]').addEventListener("click", async () => {
+            try {
+              selectedToolName = entry.name;
+              writeArgs(entry.args || {});
+              renderToolsList();
+              renderSchemaForm(tools.find((t) => t.name === selectedToolName));
+              await callTool();
+            } catch (err) {
+              appendLog("error", String(err));
+            }
+          });
+
+          historyEl.appendChild(node);
+        }
+      }
+
+      function pushHistory(name, args) {
+        history.unshift({ name, args, at: new Date().toLocaleTimeString() });
+        history = history.slice(0, 20);
+        renderHistory();
       }
 
       async function initializeSession() {
         const init = await mcpRequest("initialize", {
           protocolVersion: "2025-03-26",
           capabilities: { tools: {} },
-          clientInfo: { name: "fri3d-badge-browser-tester", version: "0.1.0" },
+          clientInfo: { name: "fri3d-badge-browser-workbench", version: "0.2.0" },
         });
         appendLog("initialize", init);
+        updateStatus();
 
-        // Best-effort follow-up notification used by many MCP servers.
         try {
           await fetch(endpointUrl(), {
             method: "POST",
@@ -256,33 +701,24 @@
             }),
           });
         } catch {
-          // Non-fatal for this basic tester.
+          // Optional notification.
         }
       }
 
       async function listTools() {
         const res = await mcpRequest("tools/list", {});
         appendLog("tools/list", res);
-        const tools = res && res.result && Array.isArray(res.result.tools) ? res.result.tools : [];
 
-        toolSelect.innerHTML = "";
-        for (const t of tools) {
-          const opt = document.createElement("option");
-          opt.value = t.name;
-          opt.textContent = t.name;
-          toolSelect.appendChild(opt);
-        }
+        tools = res && res.result && Array.isArray(res.result.tools) ? res.result.tools : [];
+        if (tools.length && !selectedToolName) selectedToolName = tools[0].name;
 
-        if (!tools.length) {
-          const opt = document.createElement("option");
-          opt.value = "";
-          opt.textContent = "(no tools returned)";
-          toolSelect.appendChild(opt);
-        }
+        updateStatus();
+        renderToolsList();
+        renderSchemaForm(tools.find((t) => t.name === selectedToolName));
       }
 
       async function callTool() {
-        const name = toolSelect.value;
+        const name = selectedToolName;
         if (!name) throw new Error("No tool selected");
 
         let args;
@@ -294,6 +730,7 @@
 
         const res = await mcpRequest("tools/call", { name, arguments: args });
         appendLog(`tools/call (${name})`, res);
+        pushHistory(name, args);
       }
 
       btnInit.addEventListener("click", async () => {
@@ -316,17 +753,44 @@
       btnCall.addEventListener("click", async () => {
         try {
           if (!sessionId) await initializeSession();
+          if (!tools.length) await listTools();
           await callTool();
         } catch (err) {
           appendLog("error", String(err));
         }
       });
 
+      btnResetSession.addEventListener("click", () => {
+        sessionId = null;
+        setPill(pillConn, "Not initialized");
+        setPill(pillSession, "Session: none");
+        appendLog("info", "Session reset. Initialize again before new calls.");
+      });
+
       btnClear.addEventListener("click", () => {
         logEl.value = "";
       });
 
-      appendLog("info", "Tester ready. Click 'Initialize' then 'List Tools'.");
+      toolFilter.addEventListener("input", renderToolsList);
+      toolArgs.addEventListener("input", syncFormFromArgs);
+
+      window.addEventListener("keydown", async (ev) => {
+        if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") {
+          ev.preventDefault();
+          try {
+            if (!sessionId) await initializeSession();
+            if (!tools.length) await listTools();
+            await callTool();
+          } catch (err) {
+            appendLog("error", String(err));
+          }
+        }
+      });
+
+      renderToolsList();
+      renderHistory();
+      updateStatus();
+      appendLog("info", "Workbench ready. Initialize, refresh tools, select a tool, then call it.");
     </script>
   </body>
 </html>
