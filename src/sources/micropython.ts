@@ -40,8 +40,8 @@ interface SphinxIndex {
   objnames?: Record<string, [string, string, string]>;
 }
 
-const indexCache = new TtlCache<SphinxIndex>(60 * 60 * 1000); // 1h
-const pageCache = new TtlCache<string>(15 * 60 * 1000); // 15min
+const indexCache = new TtlCache<SphinxIndex>(60 * 60 * 1000, "micropython-index"); // 1h
+const pageCache = new TtlCache<string>(15 * 60 * 1000, "micropython-pages"); // 15min
 
 async function loadIndex(version: string): Promise<SphinxIndex> {
   return indexCache.memo(version, async () => {
