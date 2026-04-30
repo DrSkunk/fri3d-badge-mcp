@@ -4,11 +4,9 @@ A [Model Context Protocol](https://modelcontextprotocol.io/) server that gives
 LLM clients structured access to **MicroPython** documentation and the
 **Fri3d Camp 2026 badge** documentation.
 
-It is built as a single Vercel Function using the
-[`mcp-handler`](https://www.npmjs.com/package/mcp-handler) package and is meant
-to be deployed with the
-[MCP with Vercel Functions](https://vercel.com/templates/other/model-context-protocol-mcp-with-vercel-functions)
-template.
+It can run **locally as a stdio MCP server** (via `npx`) or be deployed to
+**Vercel** as an HTTP MCP endpoint using the
+[`mcp-handler`](https://www.npmjs.com/package/mcp-handler) package.
 
 ## Sources
 
@@ -23,8 +21,8 @@ template.
   `search/search_index.json`.)
 
 Nothing is bundled or pre-indexed — everything is fetched on demand and cached
-in-memory per warm function instance, so the server stays current with upstream
-docs without redeploys.
+in memory and on disk so the server stays current with upstream docs without
+redeploys.
 
 ## Tools exposed
 
@@ -42,14 +40,53 @@ docs without redeploys.
 
 All tools return `text` content suitable for direct consumption by an LLM.
 
+## Local usage via npx (stdio transport)
+
+The easiest way to use this MCP server locally is via `npx`. Add it to your
+MCP client configuration (e.g. Claude Desktop `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "fri3d-badge": {
+      "command": "npx",
+      "args": ["fri3d-badge-mcp"]
+    }
+  }
+}
+```
+
+Or start it manually to test:
+
+```bash
+npx fri3d-badge-mcp
+```
+
+### Caching
+
+The local server caches all fetched search indices and pages using a two-layer
+strategy:
+
+| Layer | Scope | TTL |
+|-------|-------|-----|
+| In-memory | current process | 15 min – 1 h |
+| Disk (`os.tmpdir()/fri3d-badge-mcp/`) | survives restarts | same TTL |
+
+**Stale-while-revalidate**: when the disk cache has data older than its TTL
+(but less than 2× TTL), the server returns the stale data immediately while
+refreshing in the background, so the next call already gets fresh results.
+Data older than 2× TTL is always re-fetched synchronously.
+
 ## Architecture
 
 ```
 api/
-  server.ts            # MCP handler — wires zod-validated tools to source modules
+  server.ts            # Vercel MCP handler — wires tools to source modules
 src/
+  server.ts            # Standalone stdio MCP server (npx entry point)
+  tools.ts             # Shared tool registrations (used by both transports)
   lib/
-    cache.ts           # Tiny in-memory TTL cache (warm-instance reuse)
+    cache.ts           # TTL cache with disk persistence + stale-while-revalidate
     fetch.ts           # fetch() wrapper with timeout + UA
     html.ts            # Lightweight HTML → markdown-ish text extractor
   sources/
@@ -60,9 +97,6 @@ scripts/
   test-client.mjs      # Sample MCP client for local smoke testing
 vercel.json            # Routes everything to /api/server, 60s max duration
 ```
-
-The Vercel deployment is **stateless** — each cold invocation can re-fetch
-indexes; warm invocations reuse the in-process cache (TTLs of 15–60 minutes).
 
 ## Deploy on Vercel
 
@@ -81,16 +115,13 @@ https://<your-deployment>.vercel.app/mcp
 
 Uses streamable-HTTP transport only (the current MCP spec).
 
-## Local development
+## Local development (Vercel dev server)
 
 ```bash
-pnpm install         # or npm install
+npm install
 npm start            # runs `vercel dev` on http://localhost:3000
 node scripts/test-client.mjs http://localhost:3000
 ```
-
-Or wire it into an MCP-compatible client (Claude Desktop, Cursor, VS Code,
-etc.) by pointing at `http://localhost:3000/mcp`.
 
 ## Notes & limitations
 

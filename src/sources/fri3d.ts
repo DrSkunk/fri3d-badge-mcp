@@ -53,8 +53,8 @@ interface PreparedDoc extends MkDocsDoc {
   lang: "nl" | "en" | "other";
 }
 
-const indexCache = new TtlCache<PreparedDoc[]>(30 * 60 * 1000);
-const pageCache = new TtlCache<{ title: string; text: string }>(30 * 60 * 1000);
+const indexCache = new TtlCache<PreparedDoc[]>(30 * 60 * 1000, "fri3d-index");
+const pageCache = new TtlCache<{ title: string; text: string }>(30 * 60 * 1000, "fri3d-pages");
 
 async function loadIndex(): Promise<PreparedDoc[]> {
   return indexCache.memo("idx", async () => {
