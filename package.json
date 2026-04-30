@@ -2,6 +2,20 @@
   "name": "fri3d-badge-mcp",
   "version": "0.1.0",
   "description": "MCP server providing Fri3d Camp 2026 badge and MicroPython documentation lookup.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "fri3d",
+    "fri3d-camp",
+    "badge",
+    "micropython",
+    "esp32",
+    "iot",
+    "documentation",
+    "ai",
+    "llm",
+    "claude"
+  ],
   "type": "module",
   "bin": {
     "fri3d-badge-mcp": "./dist/server.js"
@@ -12,6 +26,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run build",
     "start": "npx --yes vercel dev",
     "typecheck": "tsc --noEmit",
     "test:client": "node scripts/test-client.mjs"
