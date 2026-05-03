@@ -64,6 +64,96 @@
         min-height: 8rem;
         resize: vertical;
       }
+      .log-output {
+        min-height: 26rem;
+        padding: 0.9rem 1rem;
+        font-size: 0.98rem;
+        line-height: 1.55;
+        tab-size: 2;
+        white-space: pre;
+        overflow: auto;
+        background: #fcfcff;
+      }
+      .log-feed {
+        min-height: 26rem;
+        max-height: 44rem;
+        overflow: auto;
+        border: 1px solid #cfcfcf;
+        border-radius: 6px;
+        background: #fcfcff;
+        padding: 0.75rem;
+        display: grid;
+        gap: 0.7rem;
+      }
+      .log-entry {
+        border: 1px solid #d6dbe8;
+        border-radius: 8px;
+        background: #ffffff;
+      }
+      .log-entry-header {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 0.45rem;
+        padding: 0.55rem 0.75rem;
+        border-bottom: 1px solid #e8ebf3;
+        background: #f5f8ff;
+      }
+      .log-entry-time {
+        color: #4b5568;
+        font-size: 0.86rem;
+      }
+      .log-entry-label {
+        font-weight: 700;
+        font-size: 0.86rem;
+        color: #2c3f66;
+        background: #e7eefc;
+        border: 1px solid #cfdcf8;
+        border-radius: 999px;
+        padding: 0.1rem 0.55rem;
+      }
+      .log-entry-label.info {
+        color: #1f4b7d;
+        background: #e8f2ff;
+        border-color: #c8dcf5;
+      }
+      .log-entry-label.error {
+        color: #7d1f1f;
+        background: #fdecec;
+        border-color: #f5c8c8;
+      }
+      .log-entry-label.initialize {
+        color: #234f2f;
+        background: #eaf8ef;
+        border-color: #cae9d4;
+      }
+      .log-entry-label.tools-list,
+      .log-entry-label.tools-call {
+        color: #5f3b12;
+        background: #fff3dd;
+        border-color: #f5dfb8;
+      }
+      .log-entry-content {
+        margin: 0;
+        padding: 0.75rem;
+        overflow: auto;
+        white-space: pre;
+        font-size: 0.93rem;
+        line-height: 1.55;
+      }
+      .log-entry-collapse {
+        border-top: 1px solid #edf0f7;
+      }
+      .log-entry-collapse summary {
+        cursor: pointer;
+        padding: 0.55rem 0.75rem;
+        font-size: 0.87rem;
+        color: #44546f;
+        background: #fafbff;
+      }
+      .log-entry-collapse summary:hover {
+        background: #f1f5ff;
+      }
       button {
         border: 1px solid #bbb;
         border-radius: 6px;
@@ -229,7 +319,7 @@
 
           <div>
             <label for="log">Response log</label>
-            <textarea id="log" class="mono" readonly></textarea>
+            <div id="log" class="mono log-feed" role="log" aria-live="polite" aria-label="Response log"></div>
           </div>
         </div>
       </div>
@@ -277,6 +367,7 @@
       let tools = [];
       let selectedToolName = "";
       let history = [];
+      let logEntries = [];
 
       function setPill(el, text, cls) {
         el.className = "pill" + (cls ? ` ${cls}` : "");
@@ -289,11 +380,98 @@
         setPill(pillTools, `Tools: ${tools.length}`);
       }
 
+      function classifyLogLabel(label) {
+        if (label === "error") return "error";
+        if (label === "initialize") return "initialize";
+        if (label === "tools/list") return "tools-list";
+        if (label.startsWith("tools/call")) return "tools-call";
+        return "info";
+      }
+
+      function stringifyLogPayload(value) {
+        if (typeof value !== "string") return JSON.stringify(value, null, 2);
+        try {
+          const parsed = JSON.parse(value);
+          return JSON.stringify(parsed, null, 2);
+        } catch {
+          return value;
+        }
+      }
+
+      function payloadStats(payload) {
+        const lines = payload ? payload.split(/\r?\n/).length : 1;
+        return { lines, chars: payload.length };
+      }
+
+      function shouldCollapsePayload(payload) {
+        const stats = payloadStats(payload);
+        return stats.lines > 18 || stats.chars > 1000;
+      }
+
+      function payloadPreview(payload) {
+        const firstLine = (payload.split(/\r?\n/)[0] || "").trim();
+        if (!firstLine) return "No preview";
+        return firstLine.length > 90 ? `${firstLine.slice(0, 90)}...` : firstLine;
+      }
+
+      function renderLog() {
+        logEl.textContent = "";
+
+        for (const entry of logEntries) {
+          const card = document.createElement("article");
+          card.className = "log-entry";
+
+          const header = document.createElement("div");
+          header.className = "log-entry-header";
+
+          const time = document.createElement("span");
+          time.className = "log-entry-time";
+          time.textContent = entry.ts;
+
+          const label = document.createElement("span");
+          label.className = `log-entry-label ${entry.kind}`;
+          label.textContent = entry.label;
+
+          header.appendChild(time);
+          header.appendChild(label);
+
+          card.appendChild(header);
+
+          const content = document.createElement("pre");
+          content.className = "log-entry-content";
+          content.textContent = entry.payload;
+
+          if (shouldCollapsePayload(entry.payload)) {
+            const stats = payloadStats(entry.payload);
+            const collapse = document.createElement("details");
+            collapse.className = "log-entry-collapse";
+
+            const summary = document.createElement("summary");
+            summary.textContent = `Expand payload (${stats.lines} lines, ${stats.chars} chars) - ${payloadPreview(entry.payload)}`;
+
+            collapse.appendChild(summary);
+            collapse.appendChild(content);
+            card.appendChild(collapse);
+          } else {
+            card.appendChild(content);
+          }
+
+          logEl.appendChild(card);
+        }
+
+        logEl.scrollTop = 0;
+      }
+
       function appendLog(label, value) {
         const ts = new Date().toISOString();
-        const payload = typeof value === "string" ? value : JSON.stringify(value, null, 2);
-        logEl.value += `[${ts}] ${label}\n${payload}\n\n`;
-        logEl.scrollTop = logEl.scrollHeight;
+        const payload = stringifyLogPayload(value);
+        logEntries.unshift({
+          ts,
+          label,
+          payload,
+          kind: classifyLogLabel(label),
+        });
+        renderLog();
       }
 
       function endpointUrl() {
@@ -768,7 +946,8 @@
       });
 
       btnClear.addEventListener("click", () => {
-        logEl.value = "";
+        logEntries = [];
+        renderLog();
       });
 
       toolFilter.addEventListener("input", renderToolsList);
